@@ -57,6 +57,25 @@ def _candidates_hf(dataset: str, config: str, split: str):
                "source": f"hf:{dataset}:{config}:{split}"}
 
 
+def _candidates_fleurs(config: str, splits: str):
+    """google/fleurs from its parquet files (the loading script no longer runs on current `datasets`).
+    `splits` is test, validation or test+validation. FLEURS has no speaker id; gender is FLEURS's integer code."""
+    import io
+
+    import pyarrow.parquet as pq
+    import soundfile as sf
+    from huggingface_hub import hf_hub_download
+
+    for split in splits.split("+"):
+        p = hf_hub_download("google/fleurs", f"parquet-data/{config}/{split}-00000-of-00001.parquet", repo_type="dataset")
+        t = pq.read_table(p)
+        for r in t.to_pylist():
+            x, sr = sf.read(io.BytesIO(r["audio"]["bytes"]), dtype="float32", always_2d=True)
+            yield {"key": f"fleurs-{config}-{split}-{r['id']}-{r['audio']['path']}", "audio": x.mean(1), "sr": sr,
+                   "text": r["raw_transcription"], "speaker": "", "gender": str(r["gender"]),
+                   "source": f"fleurs:{config}:{split}"}
+
+
 def _candidates_cv(folder: str):
     import soundfile as sf
 
@@ -68,24 +87,28 @@ def _candidates_cv(folder: str):
                "gender": getattr(r, "gender", "") or "", "source": f"cv:{root.name}"}
 
 
-def build_lang(lang: str, src: str, n: int, per_speaker: int) -> pd.DataFrame:
+def build_lang(lang: str, src: str, n: int, per_speaker: int, max_dur: float = 15.0) -> pd.DataFrame:
     kind, _, rest = src.partition(":")
-    gen = _candidates_hf(*rest.split(":")) if kind == "hf" else _candidates_cv(rest)
+    gen = {"hf": lambda: _candidates_hf(*rest.split(":")), "fleurs": lambda: _candidates_fleurs(*rest.split(":")),
+           "cv": lambda: _candidates_cv(rest)}[kind]()
     rows = []
     for c in gen:
         x = resample(c["audio"], c["sr"])
         dur = len(x) / P.SR
-        if not (2.0 <= dur <= 15.0) or not str(c["text"]).strip() or P.power(x) == 0:
+        if not (2.0 <= dur <= max_dur) or not str(c["text"]).strip() or P.power(x) == 0:
             continue
         c.update(audio=x, duration=round(dur, 2))
         rows.append(c)
     rng = np.random.default_rng(SEED)
     order = rng.permutation(len(rows))
-    kept, per = [], {}
+    kept, per, seen = [], {}, set()
     for i in order:
-        spk = rows[i]["speaker"]
+        spk, txt = rows[i]["speaker"], P.normalise(rows[i]["text"])
+        if txt in seen:          # one recording per sentence: FLEURS repeats sentences across speakers
+            continue
         if spk and per.get(spk, 0) >= per_speaker:
             continue
+        seen.add(txt)
         per[spk] = per.get(spk, 0) + 1
         kept.append(rows[i])
         if len(kept) == n:
@@ -110,19 +133,27 @@ def main() -> int:
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", action="append", required=True, help="lang=SPEC, see the module docstring")
-    ap.add_argument("--noise", action="append", required=True, help="noise recording(s); the first is saved as machine.wav")
+    ap.add_argument("--noise", action="append", default=[], help="noise recording(s); the first is saved as machine.wav")
     ap.add_argument("--n", type=int, default=300)
     ap.add_argument("--per-speaker", type=int, default=5)
+    ap.add_argument("--max-dur", type=float, default=15.0, help="longest clip kept, seconds (FLEURS needs ~30)")
+    ap.add_argument("--keep", action="store_true", help="keep other languages already in the manifest (build one at a time)")
     ap.add_argument("--push", action="store_true", help="upload data/raw to the private HF data repo")
     ap.add_argument("--repo", default=None)
     a = ap.parse_args()
     frames = []
+    langs = [s.partition("=")[0] for s in a.source]
+    if a.keep and (RAW / "manifest.csv").exists():
+        old = pd.read_csv(RAW / "manifest.csv", dtype=str)
+        frames.append(old[~old["lang"].isin(langs)])
     for s in a.source:
         lang, _, src = s.partition("=")
-        frames.append(build_lang(lang, src, a.n, a.per_speaker))
+        frames.append(build_lang(lang, src, a.n, a.per_speaker, a.max_dur))
         print(f"{lang}: {a.n} clips from {src}")
     pd.concat(frames, ignore_index=True).to_csv(RAW / "manifest.csv", index=False)
     (RAW / "noise").mkdir(parents=True, exist_ok=True)
+    if not a.noise and not (RAW / "noise" / "machine.wav").exists():
+        sys.exit("no --noise given and no data/raw/noise/machine.wav yet")
     for i, f in enumerate(a.noise):
         x, sr = sf.read(Path(f).expanduser(), dtype="float32", always_2d=True)
         name = "machine.wav" if i == 0 else Path(f).stem + ".wav"
