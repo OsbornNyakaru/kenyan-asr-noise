@@ -1,0 +1,24 @@
+# Recordings and transcripts stay out of this PUBLIC repository: private Hugging Face datasets instead
+data/
+experiments/runs/
+submissions/
+*.wav
+*.flac
+*.mp3
+*.zip
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv*/
+venv/
+
+# marimo / molab
+__marimo__/
+runner_work/
+
+# OS
+.DS_Store
+Thumbs.db

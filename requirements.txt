@@ -1,0 +1,13 @@
+# Unpinned on purpose until the first real molab run: then pin to the versions recorded in that run's result.json
+# (runner field "versions"), as the GeoAI loop does.
+numpy
+pandas
+scipy
+soundfile
+torch
+transformers>=4.40
+datasets          # scripts/build_data.py only (Hugging Face sources such as FLEURS)
+huggingface_hub>=0.35
+matplotlib
+marimo>=0.16
+pytest>=8

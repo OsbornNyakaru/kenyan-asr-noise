@@ -1,0 +1,43 @@
+{
+  "exp": "EXP-001",
+  "hypothesis": "H1: Kikuyu relative WER at 0 dB exceeds English and Kiswahili (non-overlapping 95% CIs)",
+  "description": "baseline: MMS-1B-all for kik/swh/eng, machine noise at clean/20/10/5/0 dB, 300 clips each",
+  "parent": null,
+  "changed": [],
+  "config": {
+    "systems": {
+      "kik": {
+        "family": "mms",
+        "model": "facebook/mms-1b-all",
+        "lang": "kik"
+      },
+      "swh": {
+        "family": "mms",
+        "model": "facebook/mms-1b-all",
+        "lang": "swh"
+      },
+      "eng": {
+        "family": "mms",
+        "model": "facebook/mms-1b-all",
+        "lang": "eng"
+      }
+    },
+    "langs": [
+      "kik",
+      "swh",
+      "eng"
+    ],
+    "snrs": [
+      null,
+      20,
+      10,
+      5,
+      0
+    ],
+    "noise": "machine.wav",
+    "n_clips": 300,
+    "batch_size": 8,
+    "device": "auto"
+  },
+  "created": "2026-11-22T09:31:33+00:00"
+}
