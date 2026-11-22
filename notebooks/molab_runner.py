@@ -134,17 +134,38 @@ def _(data_repo_input, hf_token_input, mo, os, runs_repo_input):
     GITHUB_REPO = "OsbornNyakaru/kenyan-asr-noise"
     # The frozen harness: autoresearch/prepare.py must hash to this or the runner refuses.
     PREPARE_SHA256 = "9bc8855b47f9736e5221fafd4090263ccfcc3a405a90ea773fa7b63bc62dd709"
-    RUNNER_VERSION = "2026-11-22b"
+    RUNNER_VERSION = "2026-11-22c"
 
     from huggingface_hub import CommitOperationAdd, HfApi
     from huggingface_hub import hf_hub_download as _hf_hub_download
 
     api = HfApi(token=HF_TOKEN)
     hf_hub_download = functools.partial(_hf_hub_download, token=HF_TOKEN)
+    def _can(repo):   # private repos answer 404, not 403, to a token without access
+        try:
+            api.repo_info(repo, repo_type="dataset")
+            return True
+        except Exception:
+            return False
+
     try:
-        _who = api.whoami()["name"]
-        _msg = mo.md(f"Hugging Face: signed in as **{_who}** ({_source}) · runner **{RUNNER_VERSION}** · "
-                     f"**{os.cpu_count()} CPU cores**")
+        _me = api.whoami()
+        _who = _me["name"]
+        _role = (_me.get("auth", {}).get("accessToken", {}) or {}).get("role", "unknown")
+        _access = {r: _can(r) for r in (DATA_REPO, RUNS_REPO)}
+        _lines = [f"Hugging Face: signed in as **{_who}** ({_source}, token type **{_role}**) · runner "
+                  f"**{RUNNER_VERSION}** · **{os.cpu_count()} CPU cores**"]
+        _lines += [f"- `{r}`: {'**visible**' if ok else '**not visible to this token**'}" for r, ok in _access.items()]
+        if all(_access.values()):
+            _msg = mo.md("\n".join(_lines))
+        else:
+            _lines.append(
+                "\nThe repos exist but this token cannot see them. A *fine-grained* token only reaches the repos "
+                "listed on it, and repos created after the token are not added automatically. On "
+                "huggingface.co → Settings → Access Tokens, edit this token and add **read** on the data repo and "
+                "**write** on the runs repo (or tick the user-level repo permissions), or make a new token with "
+                "them. Then paste it again and press Enter.")
+            _msg = mo.callout(mo.md("\n".join(_lines)), kind="danger")
     except Exception as _e:
         _hint = ("Paste a token above and press Enter, or set HF_TOKEN in molab's environment." if not HF_TOKEN
                  else "The token was found but rejected: check it is valid and not expired.")
