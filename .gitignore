@@ -12,7 +12,7 @@ submissions/
 __pycache__/
 *.pyc
 .pytest_cache/
-.venv*/
+.venv*
 venv/
 
 # marimo / molab
