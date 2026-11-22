@@ -1,0 +1,44 @@
+{
+  "exp": "EXP-002",
+  "hypothesis": null,
+  "description": "EXP-001 without Kikuyu (Anv-ke access pending): MMS-1B-all, swh+eng, machine noise clean/20/10/5/0 dB, 300 clips each; pipeline check on molab",
+  "parent": "EXP-001",
+  "changed": [
+    "langs"
+  ],
+  "config": {
+    "systems": {
+      "kik": {
+        "family": "mms",
+        "model": "facebook/mms-1b-all",
+        "lang": "kik"
+      },
+      "swh": {
+        "family": "mms",
+        "model": "facebook/mms-1b-all",
+        "lang": "swh"
+      },
+      "eng": {
+        "family": "mms",
+        "model": "facebook/mms-1b-all",
+        "lang": "eng"
+      }
+    },
+    "langs": [
+      "swh",
+      "eng"
+    ],
+    "snrs": [
+      null,
+      20,
+      10,
+      5,
+      0
+    ],
+    "noise": "machine.wav",
+    "n_clips": 300,
+    "batch_size": 8,
+    "device": "auto"
+  },
+  "created": "2026-11-22T10:05:35+00:00"
+}
