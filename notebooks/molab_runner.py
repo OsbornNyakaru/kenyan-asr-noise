@@ -99,7 +99,9 @@ def _(mo):
     mo.md("""
     # Kenyan ASR in noise — experiment runner
 
-    1. Paste a Hugging Face token with **read** on `kenyan-asr-noise-data` and **write** on `kenyan-asr-noise-runs`.
+    1. Give a Hugging Face token with **read** on `kenyan-asr-noise-data` and **write** on `kenyan-asr-noise-runs`:
+       either set `HF_TOKEN` in molab's environment / secrets, or paste it below and **press Enter** (the box only
+       updates on Enter or when you click away). A pasted token wins over `HF_TOKEN`.
     2. Press **Run queue**. A full spec is 3 languages × 5 noise levels × 300 clips = 4,500 transcriptions.
        Each finished noise level is uploaded as it lands: if the session drops, press Run queue again to resume.
     """)
@@ -108,7 +110,8 @@ def _(mo):
 
 @app.cell
 def _(mo, os):
-    hf_token_input = mo.ui.text(kind="password", value="", label="Hugging Face token (this session only)", full_width=True)
+    hf_token_input = mo.ui.text(kind="password", value="", full_width=True,
+                                label="Hugging Face token (this session only; leave empty to use HF_TOKEN from the environment)")
     data_repo_input = mo.ui.text(value=os.environ.get("HF_DATA_REPO", "nyakaruosborn/kenyan-asr-noise-data"), label="data repo", full_width=True)
     runs_repo_input = mo.ui.text(value=os.environ.get("HF_RUNS_REPO", "nyakaruosborn/kenyan-asr-noise-runs"), label="runs repo", full_width=True)
     mo.vstack([hf_token_input, data_repo_input, runs_repo_input])
@@ -117,29 +120,43 @@ def _(mo, os):
 
 @app.cell
 def _(data_repo_input, hf_token_input, mo, os, runs_repo_input):
-    if hf_token_input.value.strip():
-        os.environ["HF_TOKEN"] = hf_token_input.value.strip()
+    import functools
+
+    # The token is passed explicitly to every Hugging Face call: setting os.environ["HF_TOKEN"] after huggingface_hub
+    # has been imported (the packages cell imports it) is not reliably seen by it.
+    _pasted = hf_token_input.value.strip()
+    HF_TOKEN = _pasted or os.environ.get("HF_TOKEN", "").strip() or None
+    _source = "pasted token" if _pasted else ("HF_TOKEN from the environment" if HF_TOKEN else "no token")
+    if HF_TOKEN:
+        os.environ["HF_TOKEN"] = HF_TOKEN       # for anything that reads the variable later
     DATA_REPO = data_repo_input.value.strip()
     RUNS_REPO = runs_repo_input.value.strip()
     GITHUB_REPO = "OsbornNyakaru/kenyan-asr-noise"
     # The frozen harness: autoresearch/prepare.py must hash to this or the runner refuses.
     PREPARE_SHA256 = "9bc8855b47f9736e5221fafd4090263ccfcc3a405a90ea773fa7b63bc62dd709"
-    RUNNER_VERSION = "2026-11-22a"
+    RUNNER_VERSION = "2026-11-22b"
 
-    from huggingface_hub import CommitOperationAdd, HfApi, hf_hub_download
+    from huggingface_hub import CommitOperationAdd, HfApi
+    from huggingface_hub import hf_hub_download as _hf_hub_download
 
-    api = HfApi()
+    api = HfApi(token=HF_TOKEN)
+    hf_hub_download = functools.partial(_hf_hub_download, token=HF_TOKEN)
     try:
         _who = api.whoami()["name"]
-        _msg = mo.md(f"Hugging Face: signed in as **{_who}** · runner **{RUNNER_VERSION}** · **{os.cpu_count()} CPU cores**")
+        _msg = mo.md(f"Hugging Face: signed in as **{_who}** ({_source}) · runner **{RUNNER_VERSION}** · "
+                     f"**{os.cpu_count()} CPU cores**")
     except Exception as _e:
-        _msg = mo.callout(mo.md(f"Hugging Face: **not signed in** ({type(_e).__name__}). Paste a token above."), kind="danger")
+        _hint = ("Paste a token above and press Enter, or set HF_TOKEN in molab's environment." if not HF_TOKEN
+                 else "The token was found but rejected: check it is valid and not expired.")
+        _msg = mo.callout(mo.md(f"Hugging Face: **not signed in** ({_source}; {type(_e).__name__}: {str(_e)[:160]}). "
+                                f"{_hint}"), kind="danger")
     _msg
-    return CommitOperationAdd, DATA_REPO, GITHUB_REPO, PREPARE_SHA256, RUNNER_VERSION, RUNS_REPO, api, hf_hub_download
+    return (CommitOperationAdd, DATA_REPO, GITHUB_REPO, HF_TOKEN, PREPARE_SHA256, RUNNER_VERSION, RUNS_REPO, api,
+            hf_hub_download)
 
 
 @app.cell
-def _(DATA_REPO, Path, mo):
+def _(DATA_REPO, HF_TOKEN, Path, mo):
     WORK = Path.cwd() / "runner_work"
     DATA = WORK / "data"
     RAW = DATA / "raw"
@@ -148,7 +165,7 @@ def _(DATA_REPO, Path, mo):
     try:
         from huggingface_hub import snapshot_download
 
-        snapshot_download(repo_id=DATA_REPO, repo_type="dataset", local_dir=str(RAW),
+        snapshot_download(repo_id=DATA_REPO, repo_type="dataset", local_dir=str(RAW), token=HF_TOKEN,
                           allow_patterns=["manifest.csv", "manifest.json", "noise/*", "audio/**"])
     except Exception as _e:
         _err = f" ({type(_e).__name__}: {_e})"
