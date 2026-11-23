@@ -5,7 +5,8 @@ pandas
 scipy
 soundfile
 torch
-transformers>=4.40
+transformers>=5.5
+accelerate
 datasets          # scripts/build_data.py only (Hugging Face sources such as FLEURS)
 huggingface_hub>=0.35
 matplotlib

@@ -7,7 +7,8 @@
 #     "scipy",
 #     "soundfile",
 #     "torch",
-#     "transformers>=4.40",
+#     "transformers>=5.5",
+#     "accelerate",
 #     "huggingface_hub>=0.35",
 # ]
 # ///
@@ -56,16 +57,22 @@ def _():
 
 
 @app.cell
-def _(importlib, mo, sys):
+def _(importlib, mo, os, sys):
     # molab may not install the header's dependencies into the kernel (it did not for the GeoAI runner, 2026-10-14),
     # so install whatever is missing. numpy and pandas are left as molab has them.
     import shutil
     import subprocess
     from importlib.util import find_spec as _find_spec
 
-    REQUIRED = {"torch": "torch", "transformers": "transformers>=4.40", "soundfile": "soundfile", "scipy": "scipy",
-                "huggingface_hub": "huggingface_hub>=0.35"}
+    REQUIRED = {"torch": "torch", "transformers": "transformers>=5.5", "accelerate": "accelerate", "soundfile": "soundfile",
+                "scipy": "scipy", "huggingface_hub": "huggingface_hub>=0.35"}
     _missing = [spec for mod, spec in REQUIRED.items() if _find_spec(mod) is None]
+    # Gemma 4 needs transformers >= 5.5. Check for its model folder on disk WITHOUT importing transformers, so an
+    # upgrade here takes effect (a module imported before an upgrade would stay stale until a kernel restart).
+    _tf = _find_spec("transformers")
+    _tf_dir = _tf.submodule_search_locations[0] if _tf and _tf.submodule_search_locations else None
+    if _tf_dir and not os.path.isdir(os.path.join(_tf_dir, "models", "gemma4")):
+        _missing.append("transformers>=5.5")
     _err = ""
     if _missing:
         _cmd = ([shutil.which("uv"), "pip", "install", "--python", sys.executable, *_missing] if shutil.which("uv")
@@ -134,7 +141,7 @@ def _(data_repo_input, hf_token_input, mo, os, runs_repo_input):
     GITHUB_REPO = "OsbornNyakaru/kenyan-asr-noise"
     # The frozen harness: autoresearch/prepare.py must hash to this or the runner refuses.
     PREPARE_SHA256 = "9bc8855b47f9736e5221fafd4090263ccfcc3a405a90ea773fa7b63bc62dd709"
-    RUNNER_VERSION = "2026-11-22c"
+    RUNNER_VERSION = "2026-11-23a"
 
     from huggingface_hub import CommitOperationAdd, HfApi
     from huggingface_hub import hf_hub_download as _hf_hub_download

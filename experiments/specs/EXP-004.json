@@ -1,0 +1,56 @@
+{
+  "exp": "EXP-004",
+  "hypothesis": null,
+  "description": "EXP-001 with Gemma 4 E4B (audio, told the language name) for all three languages (one conceptual change: the model). Can Gemma transcribe Kikuyu at all, and how do its noise curves compare with MMS?",
+  "parent": "EXP-001",
+  "changed": [
+    "systems.eng.family",
+    "systems.eng.lang",
+    "systems.eng.lang_name",
+    "systems.eng.model",
+    "systems.kik.family",
+    "systems.kik.lang",
+    "systems.kik.lang_name",
+    "systems.kik.model",
+    "systems.swh.family",
+    "systems.swh.lang",
+    "systems.swh.lang_name",
+    "systems.swh.model"
+  ],
+  "config": {
+    "systems": {
+      "kik": {
+        "family": "gemma",
+        "model": "google/gemma-4-E4B-it",
+        "lang_name": "Kikuyu (G\u0129k\u0169y\u0169)"
+      },
+      "swh": {
+        "family": "gemma",
+        "model": "google/gemma-4-E4B-it",
+        "lang_name": "Kiswahili"
+      },
+      "eng": {
+        "family": "gemma",
+        "model": "google/gemma-4-E4B-it",
+        "lang_name": "English"
+      }
+    },
+    "langs": [
+      "kik",
+      "swh",
+      "eng"
+    ],
+    "snrs": [
+      null,
+      20,
+      10,
+      5,
+      0
+    ],
+    "noise": "machine.wav",
+    "n_clips": 300,
+    "batch_size": 8,
+    "device": "auto"
+  },
+  "created": "2026-11-23T07:40:11+00:00"
+}

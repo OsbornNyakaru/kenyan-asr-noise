@@ -76,6 +76,33 @@ def _candidates_fleurs(config: str, splits: str):
                    "source": f"fleurs:{config}:{split}"}
 
 
+ANV_REPO = "badrex/anv_data_ke_kikuyu_scripted"   # public copy of African Next Voices Kenya, Kikuyu scripted
+
+
+def _candidates_anv(split: str = "test"):
+    """African Next Voices Kenya (KenCorpus Consortium; Kikuyu by DeKUT and LDRI), Kikuyu scripted speech,
+    licence CC BY 4.0. Read from a public copy, by Osborn's decision (2026-11-23), while access to the gated original
+    (Anv-ke/kikuyu) is pending. The original's ethical-use terms (no profiling, respect contributors' consent) are
+    followed. recorder_uuid is the speaker. When official access arrives, rebuild and compare audio_id (kept in key)."""
+    import io
+
+    import pyarrow.parquet as pq
+    import soundfile as sf
+    from huggingface_hub import HfApi, hf_hub_download
+
+    files = sorted(f for f in HfApi().list_repo_files(ANV_REPO, repo_type="dataset")
+                   if f.startswith(f"data/{split}-") and f.endswith(".parquet"))
+    for f in files:
+        t = pq.read_table(hf_hub_download(ANV_REPO, f, repo_type="dataset"),
+                          columns=["audio", "audio_id", "recorder_uuid", "transcription", "domain"])
+        for r in t.to_pylist():
+            if not r["audio"] or not r["audio"].get("bytes"):   # a few rows in the copy carry no audio
+                continue
+            x, sr = sf.read(io.BytesIO(r["audio"]["bytes"]), dtype="float32", always_2d=True)
+            yield {"key": f"anv-kik-{r['audio_id']}", "audio": x.mean(1), "sr": sr, "text": r["transcription"],
+                   "speaker": str(r["recorder_uuid"]), "gender": "", "source": f"anv:{ANV_REPO}:{split}:{r['domain']}"}
+
+
 def _candidates_cv(folder: str):
     import soundfile as sf
 
@@ -90,7 +117,7 @@ def _candidates_cv(folder: str):
 def build_lang(lang: str, src: str, n: int, per_speaker: int, max_dur: float = 15.0) -> pd.DataFrame:
     kind, _, rest = src.partition(":")
     gen = {"hf": lambda: _candidates_hf(*rest.split(":")), "fleurs": lambda: _candidates_fleurs(*rest.split(":")),
-           "cv": lambda: _candidates_cv(rest)}[kind]()
+           "anv": lambda: _candidates_anv(rest or "test"), "cv": lambda: _candidates_cv(rest)}[kind]()
     rows = []
     for c in gen:
         x = resample(c["audio"], c["sr"])

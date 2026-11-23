@@ -79,14 +79,45 @@ def load_system(sys_cfg: dict, device: str):
 
         return run
     if fam == "whisper":
+        import torch
         from transformers import pipeline
 
-        asr = pipeline("automatic-speech-recognition", model=sys_cfg["model"], device=0 if device == "cuda" else -1)
+        asr = pipeline("automatic-speech-recognition", model=sys_cfg["model"], device=0 if device == "cuda" else -1,
+                       torch_dtype=torch.float16 if device == "cuda" else torch.float32)
 
         def run(batch):
             out = asr([{"raw": x, "sampling_rate": P.SR} for x in batch],
                       generate_kwargs={"language": sys_cfg["lang"], "task": "transcribe"}, batch_size=len(batch))
             return [o["text"] for o in out]
+
+        return run
+    if fam == "gemma":
+        # Gemma 4 (E2B / E4B / 12B take audio, up to 30 s). Prompt from the model card, plus the language name so
+        # that, like MMS (adapter) and Whisper (language token), the model is told which language it hears.
+        # Needs transformers >= 5.5 (AutoModelForMultimodalLM); the molab runner upgrades it when missing.
+        import torch
+        from transformers import AutoModelForMultimodalLM, AutoProcessor
+
+        proc = AutoProcessor.from_pretrained(sys_cfg["model"])
+        model = AutoModelForMultimodalLM.from_pretrained(sys_cfg["model"], dtype="auto", device_map="auto").eval()
+        prompt = (f"Transcribe the following speech segment in its original language ({sys_cfg['lang_name']}). "
+                  "Follow these specific instructions for formatting the answer:\n"
+                  "* Only output the transcription, with no newlines.\n"
+                  "* When transcribing numbers, write the digits, i.e. write 1.7 and not one point seven, "
+                  "and write 3 instead of three.")
+
+        def run(batch):
+            out = []
+            for x in batch:   # one clip per call: generation with padded audio batches is not worth the risk here
+                msgs = [{"role": "user", "content": [{"type": "text", "text": prompt},
+                                                     {"type": "audio", "audio": np.asarray(x, dtype=np.float32)}]}]
+                inp = proc.apply_chat_template(msgs, tokenize=True, return_dict=True, return_tensors="pt",
+                                               add_generation_prompt=True).to(model.device)
+                n = inp["input_ids"].shape[-1]
+                with torch.inference_mode():
+                    ids = model.generate(**inp, max_new_tokens=int(sys_cfg.get("max_new_tokens", 256)), do_sample=False)
+                out.append(proc.decode(ids[0][n:], skip_special_tokens=True).strip().replace("\n", " "))
+            return out
 
         return run
     raise ValueError(f"unknown family {fam}")

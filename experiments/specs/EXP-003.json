@@ -1,0 +1,49 @@
+{
+  "exp": "EXP-003",
+  "hypothesis": null,
+  "description": "EXP-002 with Whisper large-v3 instead of MMS for swh and eng (one conceptual change: the model). Does a stronger model start lower, and does Kiswahili still degrade faster at 10 dB?",
+  "parent": "EXP-002",
+  "changed": [
+    "systems.eng.family",
+    "systems.eng.lang",
+    "systems.eng.model",
+    "systems.swh.family",
+    "systems.swh.lang",
+    "systems.swh.model"
+  ],
+  "config": {
+    "systems": {
+      "kik": {
+        "family": "mms",
+        "model": "facebook/mms-1b-all",
+        "lang": "kik"
+      },
+      "swh": {
+        "family": "whisper",
+        "model": "openai/whisper-large-v3",
+        "lang": "swahili"
+      },
+      "eng": {
+        "family": "whisper",
+        "model": "openai/whisper-large-v3",
+        "lang": "english"
+      }
+    },
+    "langs": [
+      "swh",
+      "eng"
+    ],
+    "snrs": [
+      null,
+      20,
+      10,
+      5,
+      0
+    ],
+    "noise": "machine.wav",
+    "n_clips": 300,
+    "batch_size": 8,
+    "device": "auto"
+  },
+  "created": "2026-11-23T07:40:02+00:00"
+}
