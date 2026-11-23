@@ -1,0 +1,53 @@
+{
+  "exp": "EXP-005",
+  "hypothesis": null,
+  "description": "EXP-001 with Microsoft Paza Whisper (large-v3-turbo fine-tuned on ANV Kenya, DigiGreen Kikuyu and Common Voice Swahili; MIT) for all three languages, greedy decoding (one conceptual change: the model). Kikuyu test speakers are not in ANV train, but 61/300 test sentences are: report kik on all clips and on the 239 unseen-sentence clips (experiments/anv_overlap_clips.json).",
+  "parent": "EXP-001",
+  "changed": [
+    "systems.eng.family",
+    "systems.eng.lang",
+    "systems.eng.model",
+    "systems.kik.family",
+    "systems.kik.lang",
+    "systems.kik.model",
+    "systems.swh.family",
+    "systems.swh.lang",
+    "systems.swh.model"
+  ],
+  "config": {
+    "systems": {
+      "kik": {
+        "family": "whisper",
+        "model": "microsoft/paza-whisper-large-v3-turbo",
+        "lang": "<|kik|>"
+      },
+      "swh": {
+        "family": "whisper",
+        "model": "microsoft/paza-whisper-large-v3-turbo",
+        "lang": "<|sw|>"
+      },
+      "eng": {
+        "family": "whisper",
+        "model": "microsoft/paza-whisper-large-v3-turbo",
+        "lang": "<|en|>"
+      }
+    },
+    "langs": [
+      "kik",
+      "swh",
+      "eng"
+    ],
+    "snrs": [
+      null,
+      20,
+      10,
+      5,
+      0
+    ],
+    "noise": "machine.wav",
+    "n_clips": 300,
+    "batch_size": 8,
+    "device": "auto"
+  },
+  "created": "2026-11-23T11:56:11+00:00"
+}
