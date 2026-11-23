@@ -52,5 +52,7 @@
     "batch_size": 8,
     "device": "auto"
   },
-  "created": "2026-11-23T07:40:11+00:00"
+  "created": "2026-11-23T07:40:11+00:00",
+  "git_sha": "9e1f179baa9a7a6e7fcf070c2b9cdd2cf73948b2",
+  "submitted": "2026-11-23T07:40:29+00:00"
 }
