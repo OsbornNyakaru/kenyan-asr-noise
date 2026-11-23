@@ -16,6 +16,10 @@ Metrics:
           Syllables are counted as vowel groups, which suits Bantu CV syllables; it is a proxy, not a phonology.
     relative degradation   WER at a noise level / WER on clean audio, per language, with a paired bootstrap CI
           (the same clips are resampled for both conditions).
+
+Harness v2 (2026-11-23): normalise() maps ī → ĩ and ū → ũ (corrupted Kikuyu vowels found in 19 ANV references; the
+AfriVoices hackathon reported the same corruption) and the modifier apostrophe ʼ (U+02BC, emitted by MMS) to '.
+Only scoring changed; v1 transcripts are re-scored with scripts/rescore.py.
 """
 
 from __future__ import annotations
@@ -35,6 +39,9 @@ MANIFEST_COLS = ["clip_id", "lang", "path", "text", "speaker", "gender", "durati
 SHORT_MAX_SYLLABLES = 2                  # "short word" = 1 or 2 syllables, what spoken commands look like
 BOOTSTRAP_B, BOOTSTRAP_SEED = 2000, 42
 VOWELS = set("aeiou")
+HARNESS_VERSION = 2
+# Applied after lower-casing: corrupted Kikuyu macron vowels to the tilde vowels, and the modifier apostrophe to '.
+CHAR_FIXES = str.maketrans({"ī": "ĩ", "ū": "ũ", "ʼ": "'"})
 VALIDATION = ("Fixed clip set from manifest.csv; noise mixed deterministically per clip; corpus-level WER and "
               "no-space CER; 95% bootstrap CIs over clips (B=2000, seed 42), paired across noise levels.")
 
@@ -113,7 +120,7 @@ def snr_tag(snr_db: float | None) -> str:
 def normalise(text: str) -> str:
     """Lower case, Unicode NFC, punctuation to spaces, single spaces. Diacritics are KEPT: Kikuyu ĩ and ũ are
     different vowels from i and u, so stripping them would hide real errors."""
-    text = unicodedata.normalize("NFC", str(text)).lower()
+    text = unicodedata.normalize("NFC", str(text)).lower().translate(CHAR_FIXES)
     out = []
     for i, ch in enumerate(text):
         if unicodedata.category(ch).startswith("P"):

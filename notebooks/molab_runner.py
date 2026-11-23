@@ -140,8 +140,8 @@ def _(data_repo_input, hf_token_input, mo, os, runs_repo_input):
     RUNS_REPO = runs_repo_input.value.strip()
     GITHUB_REPO = "OsbornNyakaru/kenyan-asr-noise"
     # The frozen harness: autoresearch/prepare.py must hash to this or the runner refuses.
-    PREPARE_SHA256 = "9bc8855b47f9736e5221fafd4090263ccfcc3a405a90ea773fa7b63bc62dd709"
-    RUNNER_VERSION = "2026-11-23a"
+    PREPARE_SHA256 = "a95500dee5c386cfa852049ec0c87d277080c253f4a370af3367494831625bf9"
+    RUNNER_VERSION = "2026-11-23b"
 
     from huggingface_hub import CommitOperationAdd, HfApi
     from huggingface_hub import hf_hub_download as _hf_hub_download

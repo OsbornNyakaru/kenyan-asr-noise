@@ -110,3 +110,11 @@ def test_end_to_end_with_toy_data_and_oracle(tmp_path, monkeypatch):
     assert store.exists("summary.csv") and store.exists("kik/0dB.csv")
     again = R.run_spec({"config": cfg}, store, log=lambda *_: None)    # resumes: everything already done
     assert again["phases"] == res["phases"]
+
+
+def test_v2_maps_corrupted_kikuyu_vowels_and_modifier_apostrophe():
+    assert P.HARNESS_VERSION == 2
+    assert P.normalise("Nī mūndū") == P.normalise("Nĩ mũndũ") == "nĩ mũndũ"
+    assert P.normalise("NĪ") == "nĩ"
+    assert P.normalise("niʼtwo") == P.normalise("ni'two") == "ni'two"
+    assert P.clip_counts("Nī mūndū wakwa", "nĩ mũndũ wakwa")["w_err"] == 0
