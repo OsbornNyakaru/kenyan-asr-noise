@@ -84,6 +84,15 @@ def load_system(sys_cfg: dict, device: str):
 
         asr = pipeline("automatic-speech-recognition", model=sys_cfg["model"], device=0 if device == "cuda" else -1,
                        torch_dtype=torch.float16 if device == "cuda" else torch.float32)
+        lang = sys_cfg["lang"]
+        gc = asr.model.generation_config
+        if lang.startswith("<|") and lang not in (gc.lang_to_id or {}):
+            # Fine-tunes that add languages (Paza adds <|kik|>, <|luo|>, ...) put the token in the tokenizer but not in
+            # generation_config.lang_to_id, and transformers refuses a language it cannot map. Register it.
+            tid = asr.tokenizer.convert_tokens_to_ids(lang)
+            if tid is None or tid == asr.tokenizer.unk_token_id:
+                raise ValueError(f"{sys_cfg['model']} has no language token {lang}")
+            gc.lang_to_id = {**(gc.lang_to_id or {}), lang: int(tid)}
 
         def run(batch):
             out = asr([{"raw": x, "sampling_rate": P.SR} for x in batch],
