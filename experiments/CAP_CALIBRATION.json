@@ -1,0 +1,25 @@
+{
+  "model": "microsoft/paza-whisper-large-v3-turbo",
+  "percentile": 99.0,
+  "margin_tokens": 4,
+  "langs": {
+    "kik": {
+      "rate": 11.792,
+      "source": "badrex/anv_data_ke_kikuyu_scripted train, 6 shards",
+      "n": 18514,
+      "median": 6.973
+    },
+    "swh": {
+      "rate": 5.401,
+      "source": "google/fleurs sw_ke train.tsv",
+      "n": 3070,
+      "median": 3.366
+    },
+    "eng": {
+      "rate": 3.896,
+      "source": "google/fleurs en_us train.tsv",
+      "n": 2602,
+      "median": 2.688
+    }
+  }
+}

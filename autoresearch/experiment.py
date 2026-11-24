@@ -58,6 +58,11 @@ def _device(cfg: dict) -> str:
         return "cpu"
 
 
+def cap_tokens(seconds: float, rate: float, margin: int = 4) -> int:
+    """Most new tokens a system may write for a clip of `seconds` (EXP-006 output-length cap)."""
+    return int(np.ceil(rate * seconds)) + margin
+
+
 def load_system(sys_cfg: dict, device: str):
     """A callable: list of 16 kHz float32 arrays -> list of transcripts."""
     fam = sys_cfg["family"]
@@ -94,10 +99,22 @@ def load_system(sys_cfg: dict, device: str):
                 raise ValueError(f"{sys_cfg['model']} has no language token {lang}")
             gc.lang_to_id = {**(gc.lang_to_id or {}), lang: int(tid)}
 
+        gen = {"language": sys_cfg["lang"], "task": "transcribe"}
+        rate = sys_cfg.get("tokens_per_sec")
+
         def run(batch):
-            out = asr([{"raw": x, "sampling_rate": P.SR} for x in batch],
-                      generate_kwargs={"language": sys_cfg["lang"], "task": "transcribe"}, batch_size=len(batch))
-            return [o["text"] for o in out]
+            if rate is None:
+                out = asr([{"raw": x, "sampling_rate": P.SR} for x in batch], generate_kwargs=gen,
+                          batch_size=len(batch))
+                return [o["text"] for o in out]
+            # Output-length cap (EXP-006): at most ceil(rate * seconds) + margin new tokens per clip, with the rate set
+            # from training transcripts (scripts/calibrate_cap.py), never from the test references. Per clip, because
+            # the cap differs by clip length.
+            res = []
+            for x in batch:
+                cap = cap_tokens(len(x) / P.SR, rate, int(sys_cfg.get("cap_margin", 4)))
+                res.append(asr({"raw": x, "sampling_rate": P.SR}, generate_kwargs={**gen, "max_new_tokens": cap})["text"])
+            return res
 
         return run
     if fam == "gemma":
