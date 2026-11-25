@@ -79,7 +79,22 @@ def _candidates_fleurs(config: str, splits: str):
 ANV_REPO = "badrex/anv_data_ke_kikuyu_scripted"   # public copy of African Next Voices Kenya, Kikuyu scripted
 
 
-def _candidates_anv(split: str = "test"):
+def anv_train_index() -> tuple[set, set]:
+    """Speakers and normalised sentences in ANV train (metadata columns only; slow: reads all 36 shards)."""
+    import pyarrow.parquet as pq
+    from huggingface_hub import HfApi, HfFileSystem
+
+    fs, spk, txt = HfFileSystem(), set(), set()
+    for f in sorted(f for f in HfApi().list_repo_files(ANV_REPO, repo_type="dataset")
+                    if f.startswith("data/train-") and f.endswith(".parquet")):
+        with fs.open(f"datasets/{ANV_REPO}/{f}", "rb") as fh:
+            t = pq.read_table(fh, columns=["recorder_uuid", "transcription"]).to_pydict()
+        spk.update(map(str, t["recorder_uuid"]))
+        txt.update(P.normalise(x) for x in t["transcription"])
+    return spk, txt
+
+
+def _candidates_anv(split: str = "test", subsplit: str | None = None):
     """African Next Voices Kenya (KenCorpus Consortium; Kikuyu by DeKUT and LDRI), Kikuyu scripted speech,
     licence CC BY 4.0. Read from a public copy, by Osborn's decision (2026-11-23), while access to the gated original
     (Anv-ke/kikuyu) is pending. The original's ethical-use terms (no profiling, respect contributors' consent) are
@@ -94,9 +109,11 @@ def _candidates_anv(split: str = "test"):
                    if f.startswith(f"data/{split}-") and f.endswith(".parquet"))
     for f in files:
         t = pq.read_table(hf_hub_download(ANV_REPO, f, repo_type="dataset"),
-                          columns=["audio", "audio_id", "recorder_uuid", "transcription", "domain"])
+                          columns=["audio", "audio_id", "recorder_uuid", "transcription", "domain", "split"])
         for r in t.to_pylist():
             if not r["audio"] or not r["audio"].get("bytes"):   # a few rows in the copy carry no audio
+                continue
+            if subsplit and r["split"] != subsplit:   # validation files also repeat the dev_test rows
                 continue
             x, sr = sf.read(io.BytesIO(r["audio"]["bytes"]), dtype="float32", always_2d=True)
             yield {"key": f"anv-kik-{r['audio_id']}", "audio": x.mean(1), "sr": sr, "text": r["transcription"],
@@ -114,15 +131,19 @@ def _candidates_cv(folder: str):
                "gender": getattr(r, "gender", "") or "", "source": f"cv:{root.name}"}
 
 
-def build_lang(lang: str, src: str, n: int, per_speaker: int, max_dur: float = 15.0) -> pd.DataFrame:
+def build_lang(lang: str, src: str, n: int, per_speaker: int, max_dur: float = 15.0, exclude_txt: set = frozenset(),
+               exclude_spk: set = frozenset(), clip_set: str = "main") -> pd.DataFrame:
+    """exclude_txt / exclude_spk: normalised sentences and speakers that must not appear (earlier clip sets, training data)."""
     kind, _, rest = src.partition(":")
     gen = {"hf": lambda: _candidates_hf(*rest.split(":")), "fleurs": lambda: _candidates_fleurs(*rest.split(":")),
-           "anv": lambda: _candidates_anv(rest or "test"), "cv": lambda: _candidates_cv(rest)}[kind]()
+           "anv": lambda: _candidates_anv(*(rest or "test").split(":")), "cv": lambda: _candidates_cv(rest)}[kind]()
     rows = []
     for c in gen:
         x = resample(c["audio"], c["sr"])
         dur = len(x) / P.SR
         if not (2.0 <= dur <= max_dur) or not str(c["text"]).strip() or P.power(x) == 0:
+            continue
+        if P.normalise(c["text"]) in exclude_txt or (c["speaker"] and c["speaker"] in exclude_spk):
             continue
         c.update(audio=x, duration=round(dur, 2))
         rows.append(c)
@@ -151,7 +172,7 @@ def build_lang(lang: str, src: str, n: int, per_speaker: int, max_dur: float = 1
         (RAW / rel).parent.mkdir(parents=True, exist_ok=True)
         sf.write(RAW / rel, c["audio"], P.SR)
         out.append({"clip_id": cid, "lang": lang, "path": rel, "text": c["text"], "speaker": c["speaker"],
-                    "gender": c["gender"], "duration": c["duration"], "source": c["source"]})
+                    "gender": c["gender"], "duration": c["duration"], "source": c["source"], "clip_set": clip_set})
     return pd.DataFrame(out)
 
 
@@ -165,18 +186,35 @@ def main() -> int:
     ap.add_argument("--per-speaker", type=int, default=5)
     ap.add_argument("--max-dur", type=float, default=15.0, help="longest clip kept, seconds (FLEURS needs ~30)")
     ap.add_argument("--keep", action="store_true", help="keep other languages already in the manifest (build one at a time)")
+    ap.add_argument("--clip-set", default="main", help="main rebuilds the language; any other name APPENDS a fresh set "
+                    "whose sentences (and, for ANV, speakers) are not in the manifest yet")
+    ap.add_argument("--exclude-anv-train", action="store_true", help="also drop ANV-train speakers and sentences")
     ap.add_argument("--push", action="store_true", help="upload data/raw to the private HF data repo")
     ap.add_argument("--repo", default=None)
     a = ap.parse_args()
     frames = []
     langs = [s.partition("=")[0] for s in a.source]
-    if a.keep and (RAW / "manifest.csv").exists():
-        old = pd.read_csv(RAW / "manifest.csv", dtype=str)
+    old = pd.read_csv(RAW / "manifest.csv", dtype=str) if (RAW / "manifest.csv").exists() else None
+    if a.clip_set != "main":   # append: every existing row stays exactly as it is
+        if old is None:
+            sys.exit("--clip-set other than main needs an existing manifest")
+        if "clip_set" not in old.columns:
+            old["clip_set"] = "main"
+        if (old["clip_set"].fillna("main") == a.clip_set).any() and set(old.loc[old["clip_set"] == a.clip_set, "lang"]) & set(langs):
+            sys.exit(f"clip set {a.clip_set!r} already has {langs}: refusing to add twice")
+        frames.append(old)
+    elif a.keep and old is not None:
         frames.append(old[~old["lang"].isin(langs)])
+    anv_spk, anv_txt = anv_train_index() if a.exclude_anv_train else (set(), set())
     for s in a.source:
         lang, _, src = s.partition("=")
-        frames.append(build_lang(lang, src, a.n, a.per_speaker, a.max_dur))
-        print(f"{lang}: {a.n} clips from {src}")
+        ex_txt, ex_spk = set(anv_txt), set(anv_spk)
+        if a.clip_set != "main":
+            mine = old[old["lang"] == lang]
+            ex_txt |= {P.normalise(t) for t in mine["text"]}
+            ex_spk |= {x for x in mine["speaker"].fillna("") if x}
+        frames.append(build_lang(lang, src, a.n, a.per_speaker, a.max_dur, ex_txt, ex_spk, a.clip_set))
+        print(f"{lang}: {a.n} clips from {src} (clip set {a.clip_set})")
     pd.concat(frames, ignore_index=True).to_csv(RAW / "manifest.csv", index=False)
     (RAW / "noise").mkdir(parents=True, exist_ok=True)
     if not a.noise and not (RAW / "noise" / "machine.wav").exists():

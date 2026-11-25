@@ -27,7 +27,8 @@ DEFAULT_CONFIG = {
     "langs": ["kik", "swh", "eng"],
     "snrs": [None, 20, 10, 5, 0],          # None = clean
     "noise": "machine.wav",                # file in noise/ of the data repo
-    "n_clips": 300,                        # first N clips per language, in manifest order
+    "n_clips": 300,                        # first N clips per language, in manifest order (int, or {lang: N})
+    "clip_set": "main",                    # main = the original test clips; confirm = fresh clips (EXP-007 onwards)
     "batch_size": 8,
     "device": "auto",                      # auto | cpu | cuda
 }
@@ -37,10 +38,17 @@ def phases(cfg: dict) -> list[str]:
     return list(cfg["langs"])
 
 
-def clips_for(manifest: pd.DataFrame, lang: str, n: int) -> pd.DataFrame:
-    g = manifest[manifest["lang"] == lang].head(n)
+def n_clips(cfg: dict, lang: str) -> int:
+    n = cfg["n_clips"]
+    return int(n[lang] if isinstance(n, dict) else n)
+
+
+def clips_for(manifest: pd.DataFrame, lang: str, n: int, clip_set: str = "main") -> pd.DataFrame:
+    """First n clips of one language in one clip set. Manifests built before clip sets existed are all "main"."""
+    sets = manifest["clip_set"].fillna("main") if "clip_set" in manifest.columns else pd.Series("main", index=manifest.index)
+    g = manifest[(manifest["lang"] == lang) & (sets == clip_set)].head(n)
     if len(g) < n:
-        raise RuntimeError(f"{lang}: only {len(g)} clips in manifest, config asks for {n}")
+        raise RuntimeError(f"{lang}: only {len(g)} clips in clip set {clip_set!r}, config asks for {n}")
     return g
 
 

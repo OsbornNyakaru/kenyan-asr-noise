@@ -1,0 +1,54 @@
+{
+  "exp": "EXP-007",
+  "hypothesis": "PRE-REGISTERED (fixed by Osborn on 2026-11-25, before any confirm-set result): the deciding measure is the rise in corpus WER from clean to 10 dB, per language, with a paired 95% bootstrap CI over clips (B=2000, seed 42; scripts/length_check.py --exp EXP-007 --snr 10dB, all clips). Kikuyu is confirmed to lose accuracy faster than a language if its CI lies entirely above that language's CI. EXP-001 found kik +0.128 [0.110, 0.149], swh +0.110 [0.093, 0.129], eng +0.062 [0.052, 0.073]: the expectation is kik > eng confirmed; kik vs swh was not separated before and is not expected to be. Everything else (0 dB, CER, short words, relative WER) is reported descriptively.",
+  "description": "Confirmation of EXP-001 on FRESH clips (one conceptual change: the clip set). Same system (MMS-1B-all), noise and harness. English: all 199 unused FLEURS en_us test+dev sentences; Kiswahili: all 145 unused FLEURS sw_ke test+dev sentences; Kikuyu: 300 ANV validation (dev) clips from 25 speakers in neither our main set nor ANV train, sentences not in ANV train, at most 12 per speaker. Data choice: Osborn, option 1 (2026-11-25).",
+  "parent": "EXP-001",
+  "changed": [
+    "clip_set",
+    "n_clips",
+    "n_clips.eng",
+    "n_clips.kik",
+    "n_clips.swh"
+  ],
+  "config": {
+    "systems": {
+      "kik": {
+        "family": "mms",
+        "model": "facebook/mms-1b-all",
+        "lang": "kik"
+      },
+      "swh": {
+        "family": "mms",
+        "model": "facebook/mms-1b-all",
+        "lang": "swh"
+      },
+      "eng": {
+        "family": "mms",
+        "model": "facebook/mms-1b-all",
+        "lang": "eng"
+      }
+    },
+    "langs": [
+      "kik",
+      "swh",
+      "eng"
+    ],
+    "snrs": [
+      null,
+      20,
+      10,
+      5,
+      0
+    ],
+    "noise": "machine.wav",
+    "n_clips": {
+      "kik": 300,
+      "swh": 145,
+      "eng": 199
+    },
+    "batch_size": 8,
+    "device": "auto",
+    "clip_set": "confirm"
+  },
+  "created": "2026-11-25T06:44:49+00:00"
+}

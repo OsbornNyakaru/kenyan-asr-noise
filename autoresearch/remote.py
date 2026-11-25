@@ -36,7 +36,7 @@ def run_spec(spec: dict, store, log=print, max_minutes: float | None = None, **_
     manifest = P.load_manifest()
     noise = P.load_noise(cfg["noise"])
     device = E._device(cfg)
-    log(f"{len(cfg['langs'])} languages x {len(cfg['snrs'])} noise levels x {cfg['n_clips']} clips on {device}")
+    log(f"{len(cfg['langs'])} languages x {len(cfg['snrs'])} noise levels x {cfg['n_clips']} clips ({cfg.get('clip_set', 'main')} set) on {device}")
 
     summary = {}
     for lang in E.phases(cfg):
@@ -44,7 +44,7 @@ def run_spec(spec: dict, store, log=print, max_minutes: float | None = None, **_
             summary[lang] = json.loads(Path(store.get(f"{lang}.json")).read_text())
             log(f"{lang}: already done, skipping")
             continue
-        clips = E.clips_for(manifest, lang, int(cfg["n_clips"]))
+        clips = E.clips_for(manifest, lang, E.n_clips(cfg, lang), cfg.get("clip_set", "main"))
         todo = [s for s in cfg["snrs"] if not store.exists(f"{lang}/{P.snr_tag(s)}.csv")]
         transcribe = None
         if todo:
